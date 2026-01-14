@@ -12,15 +12,22 @@ public struct FocusableButton: View {
     public let focusedOverlay: Color
     public let hoveredBackground: Color
     public let pressedBackground: Color
-    public let pressedOverlay: Color
     public var triggerOnMouseDown: Bool
     public let action: () -> Void
 
-    @FocusState private var isFocused: Bool
+    // MARK: - Internal state
+
+    /// True when our invisible AppKit key-host is the firstResponder.
+    @State private var isKeyHostFocused: Bool = false
+
+    /// Show focus highlight ONLY after Tab traversal entered the control.
+    @State private var showsKeyboardFocus: Bool = false
+
     @State private var isHovered: Bool = false
     @State private var isPressed: Bool = false
 
-    @ObservedObject private var focusMode = KeyboardFocusMode.shared
+    /// Forces the key-host to resign firstResponder (even if click happens on non-focusable area).
+    @State private var clearFocusToken: UUID = UUID()
 
     public init(
         title: String,
@@ -33,7 +40,6 @@ public struct FocusableButton: View {
         focusedOverlay: Color = Color.accentColor.opacity(0.9),
         hoveredBackground: Color = Color.primary.opacity(0.06),
         pressedBackground: Color = Color.primary.opacity(0.14),
-        pressedOverlay: Color = Color.primary.opacity(0.35),
         triggerOnMouseDown: Bool = false,
         action: @escaping () -> Void
     ) {
@@ -47,20 +53,24 @@ public struct FocusableButton: View {
         self.focusedOverlay = focusedOverlay
         self.hoveredBackground = hoveredBackground
         self.pressedBackground = pressedBackground
-        self.pressedOverlay = pressedOverlay
         self.triggerOnMouseDown = triggerOnMouseDown
         self.action = action
     }
 
-    private func backgroundColor() -> Color {
+    private var isVisuallyFocused: Bool {
+        showsKeyboardFocus && isKeyHostFocused
+    }
+
+    private func currentBackground() -> Color {
         if isPressed { return pressedBackground }
-        if focusMode.isKeyboardMode, isFocused { return focusedBackground }
+        if isVisuallyFocused { return focusedBackground }
         if isHovered { return hoveredBackground }
         return .clear
     }
 
-    private func overlayColor() -> Color {
-        (focusMode.isKeyboardMode && isFocused) ? focusedOverlay : .clear
+    private func currentStroke() -> Color {
+        if isVisuallyFocused { return focusedOverlay }
+        return .clear
     }
 
     private func performKeyboardPressFeedbackAndAction() {
@@ -72,59 +82,81 @@ public struct FocusableButton: View {
     }
 
     public var body: some View {
-        Text(title)
-            .font(font)
-            .padding(.vertical, verticalPadding)
-            .padding(.horizontal, horizontalPadding)
+        ZStack {
+            Text(title)
+                .font(font)
+                .padding(.vertical, verticalPadding)
+                .padding(.horizontal, horizontalPadding)
+        }
+        .background {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(selectedBackground)
+        }
+        .background {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(currentBackground())
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(currentStroke(), lineWidth: 1.5)
+        }
 
-            // ✅ Core behavior:
-            // Control joins key-loop ONLY after user pressed Tab (keyboard mode).
-            .focusable(focusMode.isKeyboardMode)
-            .focused($isFocused)
+        // Mouse handling without taking keyboard focus:
+        .overlay {
+            NoFocusClickOverlay(
+                triggerOnMouseDown: triggerOnMouseDown,
+                onMouseDown: {
+                    // Any mouse interaction switches off keyboard focus visuals.
+                    showsKeyboardFocus = false
+                    clearFocusToken = UUID()
+                },
+                onClick: action,
+                onPressChanged: { isPressed = $0 },
+                onHoverChanged: { isHovered = $0 }
+            )
+        }
 
-            // We draw our own focus ring/pressed/hover styles.
-            .focusEffectDisabled()
+        // Click outside: hide focus highlight and also resign firstResponder even if AppKit didn’t move it.
+        .background(
+            OutsideClickMonitor {
+                showsKeyboardFocus = false
+                isHovered = false
+                isPressed = false
+                clearFocusToken = UUID()
+            }
+            .allowsHitTesting(false)
+        )
 
-            .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(selectedBackground)
-            }
-            .background {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .fill(backgroundColor())
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(overlayColor(), lineWidth: 1.5)
-            }
-            .overlay {
-                NoFocusClickOverlay(
-                    triggerOnMouseDown: triggerOnMouseDown,
-                    onClick: action,
-                    onPressChanged: { isPressed = $0 }
-                )
-            }
-            .onHover { isHovered = $0 }
-
-            // If we switched back to mouse mode, ensure we drop internal focus state.
-            .onChange(of: focusMode.isKeyboardMode) { _, newValue in
-                if !newValue, isFocused {
-                    isFocused = false
-                }
-            }
-
-            // Keyboard activation (when focused via Tab).
-            .onKeyPress { keyPress in
-                switch keyPress.key {
-                case .space, .return:
+        // Invisible key-host that participates in key-view-loop:
+        .overlay {
+            ButtonKeyHost(
+                isFocused: $isKeyHostFocused,
+                clearFocusToken: clearFocusToken,
+                onKeyboardInteraction: {
+                    // If user is already inside the control and presses keys - keep focus visuals.
+                    showsKeyboardFocus = true
+                },
+                onFocusInByTabTraversal: { _ in
+                    // IMPORTANT: show focus only when entered by Tab traversal.
+                    showsKeyboardFocus = true
+                },
+                onActivate: {
+                    showsKeyboardFocus = true
                     performKeyboardPressFeedbackAndAction()
-                    return .handled
-                default:
-                    return .ignored
+                },
+                onFocusOut: {
+                    // When focus leaves - reset visuals.
+                    showsKeyboardFocus = false
+                    isPressed = false
                 }
-            }
+            )
+            .frame(width: 1, height: 1)
+            .opacity(0.01)
+            .accessibilityHidden(true)
+        }
 
-            // ✅ Make sure Tab/mouse monitoring works even without FocusableButton on screen.
-            .hostsKeyboardModeDetection()
+        .accessibilityElement()
+        .accessibilityLabel(Text(title))
+        .accessibilityAddTraits(.isButton)
     }
 }

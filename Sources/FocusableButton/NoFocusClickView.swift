@@ -1,18 +1,56 @@
 import AppKit
 
 final class NoFocusClickView: NSView {
+
+    var onMouseDown: (() -> Void)?
     var onClick: (() -> Void)?
     var onPressChanged: ((Bool) -> Void)?
+    var onHoverChanged: ((Bool) -> Void)?
+
     var triggerOnMouseDown: Bool = false
 
+    private var tracking: NSTrackingArea?
+
     override var acceptsFirstResponder: Bool { false }
-    override func hitTest(_ point: NSPoint) -> NSView? { self }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        self
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+
+        if let tracking { removeTrackingArea(tracking) }
+
+        let t = NSTrackingArea(
+            rect: bounds,
+            options: [
+                .mouseEnteredAndExited,
+                .activeInKeyWindow,
+                .inVisibleRect
+            ],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(t)
+        tracking = t
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        onHoverChanged?(true)
+        super.mouseEntered(with: event)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        onHoverChanged?(false)
+        super.mouseExited(with: event)
+    }
 
     override func mouseDown(with event: NSEvent) {
-        // Clicking should NOT move keyboard focus to this view.
-        // Also, in "mouse mode" we want to clear responder chain from other controls.
+        // Mouse interaction must NOT put keyboard focus on this control.
         window?.makeFirstResponder(nil)
 
+        onMouseDown?()
         updatePressed(isInside: true)
 
         if triggerOnMouseDown {
