@@ -9,9 +9,9 @@ FocusableButton solves this by introducing a global keyboard navigation mode:
 This matches native macOS UX expectations.
 
 <p float="left">
-  <img src="screenshots/normal.png" width="500" />
-  <img src="screenshots/focused.png" width="500" />
-  <img src="screenshots/hovered.png" width="500" />
+  <img src="screenshots/normal.png" width="300" />
+  <img src="screenshots/focused.png" width="300" />
+  <img src="screenshots/hovered.png" width="300" />
 </p>
 
 ## Installation (Swift Package Manager)
