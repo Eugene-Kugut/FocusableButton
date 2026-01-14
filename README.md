@@ -53,7 +53,6 @@ FocusableButton(
     focusedOverlay: Color.accentColor.opacity(0.9),
     hoveredBackground: Color.primary.opacity(0.06),
     pressedBackground: Color.primary.opacity(0.14),
-    pressedOverlay: Color.primary.opacity(0.35),
     triggerOnMouseDown: false,
     action: {}
 )
