@@ -1,9 +1,8 @@
 import SwiftUI
 import AppKit
 
-public struct FocusableButton: View {
-    public let title: String
-    public let font: Font
+public struct FocusableButton<Label: View>: View {
+    public let label: Label
     public let verticalPadding: CGFloat
     public let horizontalPadding: CGFloat
     public let cornerRadius: CGFloat
@@ -30,8 +29,6 @@ public struct FocusableButton: View {
     @State private var clearFocusToken: UUID = UUID()
 
     public init(
-        title: String,
-        font: Font = .title3,
         verticalPadding: CGFloat = 6,
         horizontalPadding: CGFloat = 12,
         cornerRadius: CGFloat = 8,
@@ -41,10 +38,10 @@ public struct FocusableButton: View {
         hoveredBackground: Color = Color.primary.opacity(0.06),
         pressedBackground: Color = Color.primary.opacity(0.14),
         triggerOnMouseDown: Bool = false,
-        action: @escaping () -> Void
+        action: @escaping () -> Void,
+        @ViewBuilder label: () -> Label
     ) {
-        self.title = title
-        self.font = font
+        self.label = label()
         self.verticalPadding = verticalPadding
         self.horizontalPadding = horizontalPadding
         self.cornerRadius = cornerRadius
@@ -83,8 +80,7 @@ public struct FocusableButton: View {
 
     public var body: some View {
         ZStack {
-            Text(title)
-                .font(font)
+            label
                 .padding(.vertical, verticalPadding)
                 .padding(.horizontal, horizontalPadding)
         }
@@ -155,8 +151,38 @@ public struct FocusableButton: View {
             .accessibilityHidden(true)
         }
 
-        .accessibilityElement()
-        .accessibilityLabel(Text(title))
+        .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+public extension FocusableButton where Label == Text {
+    init(
+        _ titleKey: LocalizedStringKey,
+        verticalPadding: CGFloat = 6,
+        horizontalPadding: CGFloat = 12,
+        cornerRadius: CGFloat = 8,
+        selectedBackground: Color = Color.primary.opacity(0.10),
+        focusedBackground: Color = Color.accentColor.opacity(0.12),
+        focusedOverlay: Color = Color.accentColor.opacity(0.9),
+        hoveredBackground: Color = Color.primary.opacity(0.06),
+        pressedBackground: Color = Color.primary.opacity(0.14),
+        triggerOnMouseDown: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.init(
+            verticalPadding: verticalPadding,
+            horizontalPadding: horizontalPadding,
+            cornerRadius: cornerRadius,
+            selectedBackground: selectedBackground,
+            focusedBackground: focusedBackground,
+            focusedOverlay: focusedOverlay,
+            hoveredBackground: hoveredBackground,
+            pressedBackground: pressedBackground,
+            triggerOnMouseDown: triggerOnMouseDown,
+            action: action
+        ) {
+            Text(titleKey)
+        }
     }
 }

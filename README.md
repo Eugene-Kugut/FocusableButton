@@ -29,12 +29,11 @@ import FocusableButton
 struct DemoView: View {
 
     var body: some View {
-        FocusableButton(
-            title: "OK",
-            action: {
-                ...
-            }
-        )
+        FocusableButton(action: {
+            ...
+        }) {
+            Text("OK")
+        }
     }
 }
 ```
@@ -43,8 +42,6 @@ struct DemoView: View {
 
 ```swift
 FocusableButton(
-    title: "OK",
-    font: .title3,
     verticalPadding: 6,
     horizontalPadding: 12,
     cornerRadius: 8,
@@ -55,6 +52,8 @@ FocusableButton(
     pressedBackground: Color.primary.opacity(0.14),
     triggerOnMouseDown: false,
     action: {}
-)
+) {
+    Label("Open", systemImage: "folder")
+        .font(.title3)
+}
 ```
-
